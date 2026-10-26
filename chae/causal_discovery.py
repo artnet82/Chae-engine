@@ -1,7 +1,6 @@
 """Open-source causal discovery: PC + Granger only."""
 from __future__ import annotations
 
-import warnings
 from typing import Optional, Sequence
 
 import networkx as nx
@@ -24,11 +23,8 @@ def discover_pc(data, alpha: float = 0.05, labels: Optional[Sequence[str]] = Non
     n_samples, n_features = arr.shape
     labels = list(labels) if labels else [f"V{i}" for i in range(n_features)]
     
-    # Считаем корреляционную матрицу и добавляем микро-шум для стабильности
     corr = np.corrcoef(arr.T) + np.eye(n_features) * 1e-8
     suff = SuffStat(C=corr, n=n_samples)
-    
-    # Запускаем PC-алгоритм
     cpdag = pc(suff, gaussCItest, alpha=alpha, labels=labels)["graph"]
 
     g = nx.DiGraph()
@@ -43,52 +39,70 @@ def discover_pc(data, alpha: float = 0.05, labels: Optional[Sequence[str]] = Non
 
 
 # --------------------------------------------------------------------------- #
-# Granger causality
+# Granger causality (custom OLS implementation)
 # --------------------------------------------------------------------------- #
+def _ols_rss(X: np.ndarray, y: np.ndarray) -> float:
+    """Return Residual Sum of Squares for OLS regression y ~ X."""
+    coef, _, _, _ = np.linalg.lstsq(X, y, rcond=None)
+    y_pred = X @ coef
+    return float(np.sum((y - y_pred) ** 2))
+
+
 def discover_granger(df, maxlag: int = 3, alpha: float = 0.05,
                      strength_scale: float = 1.0) -> nx.DiGraph:
-    """Pairwise Granger causality test → DiGraph."""
+    """Pairwise Granger causality test via F-test → DiGraph."""
     try:
-        from statsmodels.tsa.stattools import grangercausalitytests
+        from scipy.stats import f as f_dist
     except ImportError as exc:
-        raise ImportError("pip install -e '.[timeseries]'") from exc
+        raise ImportError("pip install scipy") from exc
 
     cols = list(df.columns)
     g = nx.DiGraph()
     g.add_nodes_from(cols)
-    
+
     for target in cols:
         for source in cols:
             if source == target:
                 continue
-                
-            # ВАЖНО: конвертируем в numpy массив, чтобы statsmodels не сбоил в Linux/CI
-            pair = df[[target, source]].dropna().to_numpy()
-            if len(pair) <= maxlag + 2:
+            
+            # Принудительно приводим к float и numpy
+            pair = df[[target, source]].dropna().to_numpy(dtype=float)
+            n = len(pair)
+            if n <= maxlag + 2:
                 continue
-                
-            try:
-                # Подавляем предупреждения statsmodels, которые ломают CI
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore")
-                    res = grangercausalitytests(pair, maxlag=maxlag, verbose=False)
-            except Exception:
+
+            y = pair[:, 0]
+            x = pair[:, 1]
+
+            # Сдвигаем временные ряды (лаги)
+            Y = y[maxlag:]
+            # Ограниченная модель: только прошлое Y
+            X_r = np.column_stack(
+                [np.ones(n - maxlag)] + [y[maxlag - k - 1 : n - k - 1] for k in range(maxlag)]
+            )
+            # Неограниченная модель: прошлое Y + прошлое X
+            X_u = np.column_stack(
+                [X_r] + [x[maxlag - k - 1 : n - k - 1] for k in range(maxlag)]
+            )
+
+            rss_r = _ols_rss(X_r, Y)
+            rss_u = _ols_rss(X_u, Y)
+
+            df1 = maxlag
+            df2 = n - maxlag - X_u.shape[1]
+            
+            if df2 <= 0 or rss_u <= 1e-12:
                 continue
-                
-            # Собираем все p-value из результатов
-            pvals = []
-            for lag in res:
-                for test_name, stats in res[lag][0].items():
-                    p = stats[1]
-                    if isinstance(p, (int, float)) and not np.isnan(p):
-                        pvals.append(float(p))
-                        
-            # Если хотя бы один лаг показал значимость — добавляем ребро
-            if pvals and min(pvals) < alpha:
-                p_min = min(pvals)
-                g.add_edge(source, target,
-                           strength=round(min(1.0, 1.0 - p_min) * strength_scale, 4),
-                           evidence=f"Granger (min p={p_min:.3g})")
+
+            # F-статистика
+            f_stat = ((rss_r - rss_u) / df1) / (rss_u / df2)
+            # P-value через распределение Фишера
+            p_val = float(f_dist.sf(f_stat, df1, df2))
+
+            if p_val < alpha:
+                strength = float(min(1.0, 1.0 - p_val) * strength_scale)
+                g.add_edge(source, target, strength=round(strength, 4),
+                           evidence=f"Granger (p={p_val:.3g})")
     return g
 
 
