@@ -1,5 +1,10 @@
 # Причинный движок CHAE
 
+[![Тесты](https://github.com/artnet82/Chae-engine/actions/workflows/tests.yml/badge.svg)](https://github.com/artnet82/Chae-engine/actions/workflows/tests.yml)
+[![Лицензия: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/release/python-3100/)
+
+
 **CHAE (Causal Hierarchical Agent Engine)** — это лёгкий Python-движок, который строит **явную причинно-следственную модель мира** и рассуждает по ней. В отличие от обёрток над LLM, ядро CHAE — это граф причинности, символьный планер и четырёхслойная иерархическая память. LLM здесь опционален и подключается как вспомогательный инструмент, а не как источник истины.
 
 ## Возможности
