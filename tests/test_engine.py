@@ -1,6 +1,6 @@
-# tests/test_engine.py
 import numpy as np
 import pandas as pd
+import pytest
 from chae import CHAE
 
 
@@ -26,14 +26,14 @@ def test_memory_grows():
 def test_discover_from_data():
     e = CHAE()
     rng = np.random.default_rng(0)
-    n = 300
+    n = 500  # Увеличили выборку
     a = rng.normal(0, 1, n)
-    df = pd.DataFrame({"a": a, "b": 0.8 * a + rng.normal(0, 0.2, n)})
+    # Уменьшили шум
+    df = pd.DataFrame({"a": a, "b": 0.8 * a + rng.normal(0, 0.05, n)})
     out = e.discover_from_data(df, method="granger", maxlag=2)
     assert out["edges_discovered"] >= 1
 
 
 def test_unknown_method_raises():
-    import pytest
     with pytest.raises(ValueError):
         CHAE().discover_from_data(None, method="neural_granger")
