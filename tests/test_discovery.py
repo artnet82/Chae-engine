@@ -10,13 +10,18 @@ def test_granger_recovers_chain():
     rng = np.random.default_rng(0)
     n = 500
     a = rng.normal(0, 1, n)
-    # Уменьшили шум с 0.2 до 0.05, чтобы сигнал был четче
-    b = 0.8 * a + rng.normal(0, 0.05, n) 
-    c = 0.7 * b + rng.normal(0, 0.05, n)
+    b = np.zeros(n)
+    c = np.zeros(n)
+    
+    # Создаем временной ряд с задержкой: b[t] зависит от a[t-1]
+    for t in range(1, n):
+        b[t] = 0.8 * a[t-1] + rng.normal(0, 0.1)
+        c[t] = 0.7 * b[t-1] + rng.normal(0, 0.1)
+        
     df = pd.DataFrame({"a": a, "b": b, "c": c})
-    # Ослабили alpha до 0.05 (стандарт для тестов)
-    g = discover_granger(df, maxlag=3, alpha=0.05) 
+    g = discover_granger(df, maxlag=3, alpha=0.05)
     edges = set(g.edges())
+    # Теперь Granger должен четко увидеть связь
     assert ("a", "b") in edges or ("b", "c") in edges
 
 
