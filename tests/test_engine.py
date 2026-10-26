@@ -26,10 +26,15 @@ def test_memory_grows():
 def test_discover_from_data():
     e = CHAE()
     rng = np.random.default_rng(0)
-    n = 500  # Увеличили выборку
+    n = 500
     a = rng.normal(0, 1, n)
-    # Уменьшили шум
-    df = pd.DataFrame({"a": a, "b": 0.8 * a + rng.normal(0, 0.05, n)})
+    b = np.zeros(n)
+    
+    # Снова добавляем временной лаг: b[t] зависит от a[t-1]
+    for t in range(1, n):
+        b[t] = 0.8 * a[t-1] + rng.normal(0, 0.1)
+        
+    df = pd.DataFrame({"a": a, "b": b})
     out = e.discover_from_data(df, method="granger", maxlag=2)
     assert out["edges_discovered"] >= 1
 
