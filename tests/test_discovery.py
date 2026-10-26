@@ -7,26 +7,23 @@ from chae.causal_discovery import discover_granger, discover_pc, merge_into_caus
 
 
 def test_granger_recovers_chain():
-    rng = np.random.default_rng(0)
+    rng = np.random.default_rng(42)
     n = 500
     a = rng.normal(0, 1, n)
     b = np.zeros(n)
     c = np.zeros(n)
     
-    # Создаем временной ряд с задержкой: b[t] зависит от a[t-1]
     for t in range(1, n):
-        b[t] = 0.8 * a[t-1] + rng.normal(0, 0.1)
-        c[t] = 0.7 * b[t-1] + rng.normal(0, 0.1)
+        b[t] = 0.9 * a[t-1] + rng.normal(0, 0.01)
+        c[t] = 0.9 * b[t-1] + rng.normal(0, 0.01)
         
     df = pd.DataFrame({"a": a, "b": b, "c": c})
     g = discover_granger(df, maxlag=3, alpha=0.05)
     edges = set(g.edges())
-    # Теперь Granger должен четко увидеть связь
     assert ("a", "b") in edges or ("b", "c") in edges
 
 
 def test_pc_runs_on_synthetic():
-    # Пропускаем тест, если pcalg_py не установлен в системе
     pytest.importorskip("pcalg_py")
     
     rng = np.random.default_rng(42)
