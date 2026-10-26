@@ -9,6 +9,6 @@ jobs:
         with:
           python-version: "3.10"
       - name: Установка зависимостей
-        run: pip install -e ".[dev]"
+        run: pip install -e ".[dev,timeseries]"
       - name: Запуск тестов
         run: pytest
